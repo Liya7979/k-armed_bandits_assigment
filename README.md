@@ -1,1 +1,1 @@
-# k-armed_bandits
+# k_arms-armed_bandits
