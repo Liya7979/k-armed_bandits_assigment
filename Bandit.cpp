@@ -30,9 +30,10 @@ Bandit::Bandit(int k_arms, double epsilon, double initial, const double *p_a, do
             action_count.push_back(0);
         }
     }
+    best_action = std::distance(q_true.begin(), max_element(q_true.begin(), q_true.end()));
 }
 
-double Bandit::action() {
+int Bandit::action() {
     std::uniform_int_distribution<int> uniformIntDistribution(0, k_arms - 1);
     std::uniform_real_distribution<double> uniformRealDistribution(0, 1);
     if (epsilon > 0 && uniformRealDistribution(rnd_engine) < epsilon) return uniformIntDistribution(rnd_engine);
@@ -71,6 +72,24 @@ double Bandit::step(int action_index) {
         q_est[action_index] += step_size * (reward - q_est[action_index]);
     }
     return reward;
+}
+
+Bandit::Bandit(const Bandit &other) {
+    k_arms = other.k_arms;
+    step_size = other.step_size;
+    gradient = other.gradient;
+    gradient_baseline = other.gradient_baseline;
+    time_step = other.time_step;
+    p_a = other.p_a;
+    ucb = other.ucb;
+    average_reward = other.average_reward;
+    true_reward = other.true_reward;
+    action_prob_ = other.action_prob_;
+    rnd_engine = other.rnd_engine;
+    q_true = other.q_true;   // real reward for each action
+    q_est = other.q_est;    // estimated reward for each action
+    action_count = other.action_count; // count of chosen for each action
+    best_action = std::distance(q_true.begin(), max_element(q_true.begin(), q_true.end()));
 }
 
 
