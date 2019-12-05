@@ -9,33 +9,39 @@
 #include <exception>
 #include <iostream>
 
-Bandit::Bandit(int k_arms, double epsilon, double initial, const double *p_a, double step_size, bool sample_averages,
+Bandit::Bandit(int k_arms, double epsilon, double initial, bool bernoulli, double step_size, bool sample_averages,
                double *ucb, bool gradient, bool gradient_baseline, double true_reward) :
         k_arms(k_arms), epsilon(epsilon), step_size(step_size), sample_averages(sample_averages), ucb(ucb),
-        gradient(gradient), gradient_baseline(gradient_baseline), true_reward(true_reward), p_a_ptr(p_a) {
+        gradient(gradient), gradient_baseline(gradient_baseline), true_reward(true_reward), bernoulli(bernoulli) {
     time_step = 0;
+    q_true.resize(k_arms, 0);
     q_est.resize(k_arms, 0);
-    if (p_a == nullptr) {
+    if (!bernoulli) {
         std::normal_distribution<double> distribution(0, 1);
         for (int i = 0; i < k_arms; i++) {
-            q_true.push_back(distribution(rnd_engine) + true_reward);
+            q_true[i] = (distribution(gen) + true_reward);
             q_est[i] = initial;
             action_count.push_back(0);
         }
     } else {
         for (int i = 0; i < k_arms; i++) {
-            q_true.push_back(*p_a + true_reward);
+            std::uniform_real_distribution<double> p_a;
+            q_true[i] = (p_a(gen) + true_reward);
             q_est[i] = initial;
             action_count.push_back(0);
         }
     }
-    best_action = std::distance(q_true.begin(), max_element(q_true.begin(), q_true.end()));
+    best_action = std::distance(q_true.begin(), std::max_element(q_true.begin(), q_true.end()));
 }
 
 int Bandit::action() {
-    std::uniform_int_distribution<int> uniform_int_distr(0, k_arms - 1);
-    std::uniform_real_distribution<double> uniform_real_distr(0, 1);
-    if (epsilon > 0 && uniform_real_distr(rnd_engine) < epsilon) return uniform_int_distr(rnd_engine);
+    if (epsilon > 0) {
+        std::uniform_int_distribution<int> uniform_int_distr(0, k_arms - 1);
+        std::binomial_distribution<int> bin_dist(1, epsilon);
+        if (bin_dist(gen) == 1) {
+            return uniform_int_distr(gen);
+        }
+    }
     if (ucb != nullptr) {
         auto ucb_est = q_est;
         for (int i = 0; i < k_arms; i++) ucb_est[i] += (*ucb) * sqrt(log(time_step + 1) / (action_count[i] + 1));
@@ -48,23 +54,22 @@ int Bandit::action() {
         action_prob_ = move(exp_est);
         for (auto &x : action_prob_) x = x / tot;
         std::discrete_distribution<int> disc_dist(action_prob_.begin(), action_prob_.end());
-        return disc_dist(rnd_engine);
+        return disc_dist(gen);
     }
     return distance(q_est.begin(), max_element(q_est.begin(), q_est.end()));
 }
 
 double Bandit::step(int action_index) {
     double reward;
-    if (p_a_ptr == nullptr) {
+    if (!bernoulli) {
         std::normal_distribution<double> norm_dist(0, 1);
-        reward = norm_dist(rnd_engine) + q_true[action_index];
+        reward = norm_dist(gen) + q_true[action_index];
     } else {
         std::uniform_real_distribution<double> unif;
-        double prob = *this->p_a_ptr;
-        double rand = unif(rnd_engine);
+        double prob = q_true[action_index];
+        double rand = unif(gen);
         reward = rand <= prob ? 1 : 0;
     }
-
     time_step++;
     average_reward = (time_step - 1.0) / time_step * average_reward + reward / time_step;
     action_count[action_index] += 1;
