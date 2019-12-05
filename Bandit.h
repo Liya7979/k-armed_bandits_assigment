@@ -20,7 +20,7 @@ private:
     double *ucb;
     double average_reward;
     double true_reward;
-    std::vector<double> action_prob_;
+    std::vector<double> action_prob;
     std::random_device rd{};
     std::mt19937 gen{rd()};
     std::vector<double> q_true;   // real reward for each action
@@ -28,18 +28,18 @@ private:
     std::vector<int> action_count; // count of chosen for each action
 public:
 
-    Bandit(int k_arms=10, double epsilon = 0., double initial = 0., bool bernoulli = false, double step_size = 0.1, bool sample_averages = false,
+    Bandit(int k_arms = 10, double epsilon = 0., double initial = 0., bool bernoulli = false, double step_size = 0.1,
+           bool sample_averages = false,
            double *ucb = nullptr, bool gradient = false, bool gradient_baseline = false, double true_reward = 0.);
 
 
-    int action();
+    int get_action();
 
-    double step(int action_index);
+    double take_action(int action_index);
 
     double epsilon{};
     bool sample_averages{};
     int best_action;
 };
-
 
 #endif //K_ARMED_BANDITS_BANDIT_H

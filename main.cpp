@@ -3,11 +3,37 @@
 #include <fstream>
 #include "Bandit.h"
 
+std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>
+bandit_simulation(int num_bandits, int time_step, std::vector<std::vector<Bandit *>> &bandits);
 
-void clear_bandits(const std::vector<std::vector<Bandit *>> &bandits);
+void epsilon_greedy(int num_bandits, int time_step, int k_arms, bool bernoulli);
+
+void optimistic_initial_values(int num_bandits, int time_step, int k_arms, bool bernoulli);
+
+void gradient_bandit(int num_bandits, int time_step, int k_arms, bool bernoulli);
+
+void ucb(int num_bandits, int time_step, int k_arms, bool bernoulli);
+
 
 void send_to_file(const std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>> &res,
                   const std::string &params);
+
+void clear_bandits(const std::vector<std::vector<Bandit *>> &bandits);
+
+int main() {
+    int arms[] = {5, 10, 20, 40};
+    bool bernoulli[] = {true, false};
+    for (auto &arm: arms) {
+        for (auto &b : bernoulli) {
+//            epsilon_greedy(10000, 1000, arm, b);
+//            optimistic_initial_values(10000, 1000, arm, b);
+//            ucb(10000, 1000, arm, b);
+            gradient_bandit(10000, 1000, arm, b);
+        }
+        break;
+    }
+    return 0;
+}
 
 std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>>
 bandit_simulation(int num_bandits, int time_step, std::vector<std::vector<Bandit *>> &bandits) {
@@ -16,20 +42,14 @@ bandit_simulation(int num_bandits, int time_step, std::vector<std::vector<Bandit
     for (size_t b = 0; b < bandits.size(); b++) {
         for (int i = 0; i < num_bandits; i++) {
             for (int t = 0; t < time_step; t++) {
-                auto action_index = bandits[b][i]->action();
-                auto reward = bandits[b][i]->step(action_index);
+                auto action_index = bandits[b][i]->get_action();
+                auto reward = bandits[b][i]->take_action(action_index);
                 average_rewards[b][t] += reward;
-                if (action_index == bandits[b][i]->best_action) {
-                    best_action_counts[b][t] += 1;
-                }
+                if (action_index == bandits[b][i]->best_action) best_action_counts[b][t]++;
             }
         }
-        for (auto &x : best_action_counts[b]) {
-            x = x / num_bandits;
-        }
-        for (auto &x : average_rewards[b]) {
-            x = x / num_bandits;
-        }
+        for (auto &x : best_action_counts[b]) x = x / num_bandits;
+        for (auto &x : average_rewards[b]) x = x / num_bandits;
 
     }
     return make_pair(best_action_counts, average_rewards);
@@ -37,110 +57,97 @@ bandit_simulation(int num_bandits, int time_step, std::vector<std::vector<Bandit
 
 void epsilon_greedy(int num_bandits, int time_step, int k_arms, bool bernoulli) {
     std::vector<double> epsilons = {0, 0.1, 0.01};
-    std::vector<std::vector<Bandit *>> bandits;
+    std::vector<std::vector<Bandit *>> all_bandit_experiments;
     for (double epsilon : epsilons) {
-        std::vector<Bandit *> vec_bandits;
+        std::vector<Bandit *> bandits;
         for (int j = 0; j < num_bandits; j++) {
-            vec_bandits.push_back(new Bandit(k_arms, epsilon, 0., bernoulli));
-            vec_bandits.back()->epsilon = epsilon;
-            vec_bandits.back()->sample_averages = true;
+            bandits.push_back(new Bandit(k_arms, epsilon, 0., bernoulli));
+            bandits.back()->epsilon = epsilon;
+            bandits.back()->sample_averages = true;
         }
-        bandits.push_back(vec_bandits);
+        all_bandit_experiments.push_back(bandits);
     }
-    auto res = bandit_simulation(num_bandits, time_step, bandits);
-    std::string filename = "epsilon_" + std::to_string(k_arms);
+    auto res = bandit_simulation(num_bandits, time_step, all_bandit_experiments);
+    std::string filename = "epsilon_" + std::to_string(k_arms) + (bernoulli ? "_bernoulli" : "_normal");
     send_to_file(res, filename);
-    clear_bandits(bandits);
+    clear_bandits(all_bandit_experiments);
 }
 
 
-void clear_bandits(const std::vector<std::vector<Bandit *>> &bandits) {
-    for (auto &v : bandits)
-        for (auto p : v)
-            delete p;
-}
-
-void optimistic_initial_values(int num_bandits, int time_step, int k_arms) {
+void optimistic_initial_values(int num_bandits, int time_step, int k_arms, bool bernoulli) {
     using namespace std;
-    vector<vector<Bandit *>> bandits;
-    vector<Bandit *> vec_bandits;
+    vector<vector<Bandit *>> all_bandit_experiments;
+    vector<Bandit *> bandits;
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0., 5, false, 0.1));
+        bandits.push_back(new Bandit(k_arms, 0., 5, bernoulli, 0.1));
     }
-
-
-    bandits.push_back(vec_bandits);
-
-    vec_bandits.clear();
-
+    all_bandit_experiments.push_back(bandits);
+    bandits.clear();
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0.1, 0, false, 0.1));
+        bandits.push_back(new Bandit(k_arms, 0.1, 0, bernoulli, 0.1));
     }
-
-    bandits.push_back(vec_bandits);
-
-    auto res = bandit_simulation(num_bandits, time_step, bandits);
-
-    std::string filename = "optimistic_" + std::to_string(k_arms);
+    all_bandit_experiments.push_back(bandits);
+    auto res = bandit_simulation(num_bandits, time_step, all_bandit_experiments);
+    std::string filename = "optimistic_" + std::to_string(k_arms) + (bernoulli ? "_bernoulli" : "_normal");
     send_to_file(res, filename);
-    clear_bandits(bandits);
+    clear_bandits(all_bandit_experiments);
 }
 
-void ucb(int num_bandits, int time_step, int k_arms) {
-    std::vector<std::vector<Bandit *>> bandits;
-    std::vector<Bandit *> vec_bandits;
+void ucb(int num_bandits, int time_step, int k_arms, bool bernoulli) {
+    std::vector<std::vector<Bandit *>> all_bandit_experiments;
+    std::vector<Bandit *> bandits;
     double ucb_param = 2;
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0., 0., false,
-                                         0.1, false, &ucb_param));
+        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
+                                     0.1, false, &ucb_param));
     }
-    bandits.push_back(vec_bandits);
-    vec_bandits.clear();
+    all_bandit_experiments.push_back(bandits);
+    bandits.clear();
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0.1, 0., false,
-                                         0.1));
+        bandits.push_back(new Bandit(k_arms, 0.1, 0., bernoulli,
+                                     0.1));
     }
-    bandits.push_back(vec_bandits);
-    auto res = bandit_simulation(num_bandits, time_step, bandits);
-    std::string filename = "ucb_" + std::to_string(k_arms);
+    all_bandit_experiments.push_back(bandits);
+    auto res = bandit_simulation(num_bandits, time_step, all_bandit_experiments);
+    std::string filename = "ucb_" + std::to_string(k_arms) + (bernoulli ? "_bernoulli" : "_normal");
     send_to_file(res, filename);
-    clear_bandits(bandits);
+    clear_bandits(all_bandit_experiments);
 }
 
-void gradient_bandit(int num_bandits, int time_step, int k_arms) {
-    std::vector<std::vector<Bandit *>> bandits;
-    std::vector<Bandit *> vec_bandits;
+void gradient_bandit(int num_bandits, int time_step, int k_arms, bool bernoulli) {
+    std::vector<std::vector<Bandit *>> all_bandit_experiments;
+    std::vector<Bandit *> bandits;
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0., 0., false,
-                                         0.1, false, nullptr,
-                                         true, true, 4));
+        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
+                                     0.1, false, nullptr,
+                                     true, true, 0));
     }
-    bandits.push_back(vec_bandits);
-    vec_bandits.clear();
+    all_bandit_experiments.push_back(bandits);
+    bandits.clear();
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0., 0., false,
-                                         0.1, false, nullptr,
-                                         true, false, 4));
+        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
+                                     0.1, false, nullptr,
+                                     true, false, 0));
     }
-    bandits.push_back(vec_bandits);
-    vec_bandits.clear();
+    all_bandit_experiments.push_back(bandits);
+    bandits.clear();
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0., 0., false,
-                                         0.4, false, nullptr,
-                                         true, true, 4));
+        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
+                                     0.4, false, nullptr,
+                                     true, true, 0));
     }
-    bandits.push_back(vec_bandits);
-    vec_bandits.clear();
+    all_bandit_experiments.push_back(bandits);
+    bandits.clear();
     for (int j = 0; j < num_bandits; j++) {
-        vec_bandits.push_back(new Bandit(k_arms, 0., 0., false,
-                                         0.4, false, nullptr,
-                                         true, false, 4));
+        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
+                                     0.4, false, nullptr,
+                                     true, false, 0));
     }
-    bandits.push_back(vec_bandits);
-    auto res = bandit_simulation(num_bandits, time_step, bandits);
-    std::string filename = "gradient_" + std::to_string(k_arms);
+    all_bandit_experiments.push_back(bandits);
+    auto res = bandit_simulation(num_bandits, time_step, all_bandit_experiments);
+    std::string filename = "gradient_" + std::to_string(k_arms) + (bernoulli ? "_bernoulli" : "_normal");
     send_to_file(res, filename);
-    clear_bandits(bandits);
+    clear_bandits(all_bandit_experiments);
 }
 
 void send_to_file(const std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>> &res,
@@ -165,16 +172,9 @@ void send_to_file(const std::pair<std::vector<std::vector<double>>, std::vector<
     output.close();
 }
 
-int main() {
-    int arms[4] = {5, 10, 20, 40};
-    for (auto &arm: arms) {
-        epsilon_greedy(10000, 1000, arm, true);
-        //std::cout << p_a << std::endl;
-//        optimistic_initial_values(10000, 1000, arm);
-//        ucb(10000, 1000, arm);
-//        gradient_bandit(10000, 1000, arm);
-        break;
-
-    }
-    return 0;
+void clear_bandits(const std::vector<std::vector<Bandit *>> &bandits) {
+    for (auto &v : bandits)
+        for (auto p : v)
+            delete p;
 }
+
