@@ -21,16 +21,12 @@ void send_to_file(const std::pair<std::vector<std::vector<double>>, std::vector<
 void clear_bandits(const std::vector<std::vector<Bandit *>> &bandits);
 
 int main() {
-    int arms[] = {5, 10, 20, 40};
     bool bernoulli[] = {true, false};
-    for (auto &arm: arms) {
-        for (auto &b : bernoulli) {
-//            epsilon_greedy(10000, 1000, arm, b);
-//            optimistic_initial_values(10000, 1000, arm, b);
-//            ucb(10000, 1000, arm, b);
-            gradient_bandit(10000, 1000, arm, b);
-        }
-        break;
+    for (auto &b : bernoulli) {
+        epsilon_greedy(10000, 1000, 20, b);
+        optimistic_initial_values(10000, 1000, 20, b);
+        ucb(10000, 1000, 20, b);
+        gradient_bandit(10000, 1000, 20, b);
     }
     return 0;
 }
@@ -56,7 +52,7 @@ bandit_simulation(int num_bandits, int time_step, std::vector<std::vector<Bandit
 }
 
 void epsilon_greedy(int num_bandits, int time_step, int k_arms, bool bernoulli) {
-    std::vector<double> epsilons = {0, 0.1, 0.01};
+    std::vector<double> epsilons = {0, 0.1, 0.05, 0.01};
     std::vector<std::vector<Bandit *>> all_bandit_experiments;
     for (double epsilon : epsilons) {
         std::vector<Bandit *> bandits;
@@ -78,15 +74,14 @@ void optimistic_initial_values(int num_bandits, int time_step, int k_arms, bool 
     using namespace std;
     vector<vector<Bandit *>> all_bandit_experiments;
     vector<Bandit *> bandits;
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0., 5, bernoulli, 0.1));
+    int optimistic[] = {0, 1, 2, 5};
+    for (auto &o:optimistic) {
+        for (int j = 0; j < num_bandits; j++) {
+            bandits.push_back(new Bandit(k_arms, 0., o, bernoulli, 0.1));
+        }
+        all_bandit_experiments.push_back(bandits);
+        bandits.clear();
     }
-    all_bandit_experiments.push_back(bandits);
-    bandits.clear();
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0.1, 0, bernoulli, 0.1));
-    }
-    all_bandit_experiments.push_back(bandits);
     auto res = bandit_simulation(num_bandits, time_step, all_bandit_experiments);
     std::string filename = "optimistic_" + std::to_string(k_arms) + (bernoulli ? "_bernoulli" : "_normal");
     send_to_file(res, filename);
@@ -96,18 +91,15 @@ void optimistic_initial_values(int num_bandits, int time_step, int k_arms, bool 
 void ucb(int num_bandits, int time_step, int k_arms, bool bernoulli) {
     std::vector<std::vector<Bandit *>> all_bandit_experiments;
     std::vector<Bandit *> bandits;
-    double ucb_param = 2;
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
-                                     0.1, false, &ucb_param));
+    double ucb_param[] = {0, 0.5, 1, 1.5, 2};
+    for (auto &ucb : ucb_param) {
+        for (int j = 0; j < num_bandits; j++) {
+            bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
+                                         0.1, false, &ucb));
+        }
+        all_bandit_experiments.push_back(bandits);
+        bandits.clear();
     }
-    all_bandit_experiments.push_back(bandits);
-    bandits.clear();
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0.1, 0., bernoulli,
-                                     0.1));
-    }
-    all_bandit_experiments.push_back(bandits);
     auto res = bandit_simulation(num_bandits, time_step, all_bandit_experiments);
     std::string filename = "ucb_" + std::to_string(k_arms) + (bernoulli ? "_bernoulli" : "_normal");
     send_to_file(res, filename);
@@ -117,33 +109,19 @@ void ucb(int num_bandits, int time_step, int k_arms, bool bernoulli) {
 void gradient_bandit(int num_bandits, int time_step, int k_arms, bool bernoulli) {
     std::vector<std::vector<Bandit *>> all_bandit_experiments;
     std::vector<Bandit *> bandits;
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
-                                     0.1, false, nullptr,
-                                     true, true, 0));
+    bool baselines[] = {true, false};
+    double step_sizes[] = {0.05, 0.1, 0.4};
+    for (auto &baseline : baselines) {
+        for (auto &step_size : step_sizes) {
+            for (int j = 0; j < num_bandits; j++) {
+                bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
+                                             step_size, false, nullptr,
+                                             true, baseline));
+            }
+            all_bandit_experiments.push_back(bandits);
+            bandits.clear();
+        }
     }
-    all_bandit_experiments.push_back(bandits);
-    bandits.clear();
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
-                                     0.1, false, nullptr,
-                                     true, false, 0));
-    }
-    all_bandit_experiments.push_back(bandits);
-    bandits.clear();
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
-                                     0.4, false, nullptr,
-                                     true, true, 0));
-    }
-    all_bandit_experiments.push_back(bandits);
-    bandits.clear();
-    for (int j = 0; j < num_bandits; j++) {
-        bandits.push_back(new Bandit(k_arms, 0., 0., bernoulli,
-                                     0.4, false, nullptr,
-                                     true, false, 0));
-    }
-    all_bandit_experiments.push_back(bandits);
     auto res = bandit_simulation(num_bandits, time_step, all_bandit_experiments);
     std::string filename = "gradient_" + std::to_string(k_arms) + (bernoulli ? "_bernoulli" : "_normal");
     send_to_file(res, filename);
