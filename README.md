@@ -1,4 +1,4 @@
-# 20_armed bandits problem
+# 20 armed bandits problem
 
 To run the code, use the generated makefile and run the compiled executable file:
 ```
